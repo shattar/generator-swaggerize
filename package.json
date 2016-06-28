@@ -62,7 +62,9 @@
   "scripts": {
     "test": "tape test/*.js",
     "cover": "istanbul cover tape -- test/*.js",
-    "lint": "jshint -c .jshintrc app/*.js"
+    "lint": "jshint -c .jshintrc app/*.js",
+    "cover-win": "istanbul cover node_modules/tape/bin/tape -- test/*.js",
+    "lint-win": "jshint -c .jshintrc app"
   },
   "main": "./lib/index",
   "license": "Apache-2.0"
