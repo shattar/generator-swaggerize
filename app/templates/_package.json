@@ -37,7 +37,7 @@
         "test": "tape tests/*.js",
         "cover": "istanbul cover tape -- test/*.js",
         "lint": "jshint -c .jshintrc --exclude ./node_modules .",
-        "regenerate": "yo swaggerize --only=handlers,models,tests --framework <%=framework%> --apiPath <%=apiConfigPath%>"
+        "regenerate": "yo swaggerize --only=handlers,models,tests --framework <%=framework%> --apiPath <%=apiConfigPath.replace(/\\/g, '/')%>"
     },
     "main" : "./server"
 }

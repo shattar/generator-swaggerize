@@ -1,7 +1,8 @@
 generator-swaggerize
 ====================
 
-Lead Maintainer: [Trevor Livingston](https://github.com/tlivings/)  
+Lead Maintainer: [Trevor Livingston](https://github.com/tlivings/)
+Forker: [Aaron Shatters](https://github.com/shattar/)
 
 [![Build Status](https://travis-ci.org/krakenjs/generator-swaggerize.svg?branch=master)](https://travis-ci.org/krakenjs/generator-swaggerize)  
 [![NPM version](https://badge.fury.io/js/generator-swaggerize.png)](http://badge.fury.io/js/generator-swaggerize)  
@@ -49,3 +50,4 @@ $ yo swaggerize --only=handlers,models,tests
 
 - `--framework` - specify the framework (`hapi` or `express`).
 - `--apiPath` - specify the path to the swagger document.
+- `--skip-install` - skip the last step of executing the local install, `npm install`.

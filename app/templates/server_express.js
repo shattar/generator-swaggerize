@@ -13,7 +13,7 @@ var server = http.createServer(app);
 app.use(bodyParser.json());
 
 app.use(swaggerize({
-    api: path.resolve('./<%=apiPath%>'),
+    api: path.resolve('./<%=apiPath.replace(/\\/g, "/")%>'),
     handlers: path.resolve('./handlers')
 }));
 

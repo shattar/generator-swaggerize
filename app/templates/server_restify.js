@@ -13,7 +13,7 @@ server.get('/api', function (req, res) {
 });
 
 swaggerize(server, {
-    api: path.resolve('./<%=apiPath%>'),
+    api: path.resolve('./<%=apiPath.replace(/\\/g, "/")%>'),
     handlers: path.resolve('./handlers')
 });
 

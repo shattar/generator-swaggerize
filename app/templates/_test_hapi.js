@@ -21,8 +21,8 @@ Test('api', function (t) {
         server.register({
             register: Swaggerize,
             options: {
-                api: Path.join(__dirname, './<%=apiPath%>'),
-                handlers: Path.join(__dirname, '<%=handlers%>')
+                api: Path.join(__dirname, './<%=apiPath.replace(/\\/g, "/")%>'),
+                handlers: Path.join(__dirname, '<%=handlers.replace(/\\/g, "/")%>')
             }
         }, function (err) {
             t.error(err, 'No error.');
@@ -39,9 +39,19 @@ Test('api', function (t) {
         var responseSchema = response && response.schema;
         if (operation.parameters && operation.parameters.length) {
             _.forEach(operation.parameters, function (param) {
-                if (param.in === 'path') {
+                
+                var derefParam = param;
+
+                if (param.$ref && param.$ref.startsWith('#/parameters')) {
+                    var paramKey = param.$ref.split('/').slice(2).join('/');
+                    if (parameters.hasOwnProperty(paramKey)) {
+                        derefParam = parameters[paramKey];
+                    }
+                }
+                
+                if (derefParam.in === 'path') {
                     path = operation.path.replace(/{([^}]*)}*/, function (p1, p2) {
-                        switch (param.type) {
+                        switch (derefParam.type) {
                             case 'integer':
                             case 'number':
                             case 'byte':
@@ -54,9 +64,8 @@ Test('api', function (t) {
                                 return '{' + p2 + '}';
                         }
                     });
-                }
-                if (param.in === 'body') {
-                    body = models[param.schema.$ref.slice(param.schema.$ref.lastIndexOf('/') + 1)];
+                } else if (derefParam.in === 'body') {
+                    body = models[derefParam.schema.$ref.slice(derefParam.schema.$ref.lastIndexOf('/') + 1)];
                 }
             });
         }
@@ -68,7 +77,7 @@ Test('api', function (t) {
         var responseSchema = Enjoi({<%_.forEach(Object.keys(responseSchema), function (k, i) {%>
             '<%=k%>': <%=JSON.stringify(responseSchema[k])%><%if (i < Object.keys(responseSchema).length - 1) {%>, <%}%><%})%>
         }, {
-          '#': <%if (apiPath.indexOf('.yaml') === apiPath.length - 5 || apiPath.indexOf('.yml') === apiPath.length - 4) {%> jsYaml.load(fs.readFileSync(Path.join(__dirname, './<%=apiPath%>'))) <% }else{ %> require(Path.join(__dirname, './<%=apiPath%>')) <% } %>
+          '#': <%if (apiPath.indexOf('.yaml') === apiPath.length - 5 || apiPath.indexOf('.yml') === apiPath.length - 4) {%> jsYaml.load(fs.readFileSync(Path.join(__dirname, './<%=apiPath.replace(/\\/g, "/")%>'))) <% }else{ %> require(Path.join(__dirname, './<%=apiPath.replace(/\\/g, "/")%>')) <% } %>
         });
         <%}%>
         var options = {

@@ -16,8 +16,8 @@ test('api', function (t) {
     server.use(restify.bodyParser());<%}});%>
 
     swaggerize(server, {
-        api: path.join(__dirname, './<%=apiPath%>'),
-        handlers: path.join(__dirname, '<%=handlers%>')
+        api: path.join(__dirname, './<%=apiPath.replace(/\\/g, "/")%>'),
+        handlers: path.join(__dirname, '<%=handlers.replace(/\\/g, "/")%>')
     });
 
     <%_.forEach(operations, function (operation) {%>
@@ -30,9 +30,19 @@ test('api', function (t) {
         var responseSchema = response && response.schema;
         if (operation.parameters && operation.parameters.length) {
             _.forEach(operation.parameters, function (param) {
-                if (param.in === 'path') {
+
+                var derefParam = param;
+
+                if (param.$ref && param.$ref.startsWith('#/parameters')) {
+                    var paramKey = param.$ref.split('/').slice(2).join('/');
+                    if (parameters.hasOwnProperty(paramKey)) {
+                        derefParam = parameters[paramKey];
+                    }
+                }
+
+                if (derefParam.in === 'path') {
                     path = operation.path.replace(/{([^}]*)}*/, function (p1, p2) {
-                        switch (param.type) {
+                        switch (derefParam.type) {
                             case 'integer':
                             case 'number':
                             case 'byte':
@@ -45,9 +55,8 @@ test('api', function (t) {
                                 return '{' + p2 + '}';
                         }
                     });
-                }
-                if (param.in === 'body') {
-                    body = models[param.schema.$ref.slice(param.schema.$ref.lastIndexOf('/') + 1)];
+                } else if (derefParam.in === 'body') {
+                    body = models[derefParam.schema.$ref.slice(derefParam.schema.$ref.lastIndexOf('/') + 1)];
                 }
             });
         }
@@ -59,7 +68,7 @@ test('api', function (t) {
         var responseSchema = enjoi({<%_.forEach(Object.keys(responseSchema), function (k, i) {%>
             '<%=k%>': <%=JSON.stringify(responseSchema[k])%><%if (i < Object.keys(responseSchema).length - 1) {%>, <%}%><%})%>
         }, {
-          '#': <%if (apiPath.indexOf('.yaml') === apiPath.length - 5 || apiPath.indexOf('.yml') === apiPath.length - 4) {%> jsYaml.load(fs.readFileSync(path.join(__dirname, './<%=apiPath%>'))) <% }else{ %> require(path.join(__dirname, './<%=apiPath%>')) <% } %>
+          '#': <%if (apiPath.indexOf('.yaml') === apiPath.length - 5 || apiPath.indexOf('.yml') === apiPath.length - 4) {%> jsYaml.load(fs.readFileSync(path.join(__dirname, './<%=apiPath.replace(/\\/g, "/")%>'))) <% }else{ %> require(path.join(__dirname, './<%=apiPath.replace(/\\/g, "/")%>')) <% } %>
         });
         <%}%>
 

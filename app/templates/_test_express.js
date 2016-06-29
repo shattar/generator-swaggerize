@@ -16,8 +16,8 @@ test('api', function (t) {
     app.use(require('body-parser')());<%}});%>
 
     app.use(swaggerize({
-        api: path.join(__dirname, './<%=apiPath%>'),
-        handlers: path.join(__dirname, '<%=handlers%>')
+        api: path.join(__dirname, './<%=apiPath.replace(/\\/g, "/")%>'),
+        handlers: path.join(__dirname, '<%=handlers.replace(/\\/g, "/")%>')
     }));
 
     <%_.forEach(operations, function (operation) {%>
@@ -25,15 +25,24 @@ test('api', function (t) {
         <%
         var path = operation.path;
         var body;
-        var ref;
         var responseCode = operation.responses && Object.keys(operation.responses)[0];
         var response = responseCode && operation.responses[responseCode];
         var responseSchema = response && response.schema;
         if (operation.parameters && operation.parameters.length) {
             _.forEach(operation.parameters, function (param) {
-                if (param.in === 'path') {
+                
+                var derefParam = param;
+                
+                if (param.$ref && param.$ref.startsWith('#/parameters')) {
+                    var paramKey = param.$ref.split('/').slice(2).join('/');
+                    if (parameters.hasOwnProperty(paramKey)) {
+                        derefParam = parameters[paramKey];
+                    }
+                }
+                
+                if (derefParam.in === 'path') {
                     path = operation.path.replace(/{([^}]*)}*/, function (p1, p2) {
-                        switch (param.type) {
+                        switch (derefParam.type) {
                             case 'integer':
                             case 'number':
                             case 'byte':
@@ -46,12 +55,11 @@ test('api', function (t) {
                                 return '{' + p2 + '}';
                         }
                     });
-                }
-                if (param.in === 'body' && param.schema) {
-                    ref = param.schema.$ref;
+                } else if (derefParam.in === 'body' && derefParam.schema) {
+                    var ref = derefParam.schema.$ref;
                     //Get the $ref from the items for array definitions
-                    if (param.schema.type === 'array' && param.schema.items) {
-                        ref = param.schema.items.$ref;
+                    if (derefParam.schema.type === 'array' && derefParam.schema.items) {
+                        ref = derefParam.schema.items.$ref;
                     }
                     if (ref) {
                         body = models[ref.slice(ref.lastIndexOf('/') + 1)];
@@ -68,7 +76,7 @@ test('api', function (t) {
             '<%=k%>': <%=JSON.stringify(responseSchema[k])%><%if (i < Object.keys(responseSchema).length - 1) {%>, <%}%><%})%>
         }, {
                 subSchemas: {
-                    '#': <%if (apiPath.indexOf('.yaml') === apiPath.length - 5 || apiPath.indexOf('.yml') === apiPath.length - 4) {%> jsYaml.load(fs.readFileSync(path.join(__dirname, './<%=apiPath%>'))) <% }else{ %> require(Path.join(__dirname, './<%=apiPath%>')) <% } %>
+                    '#': <%if (apiPath.indexOf('.yaml') === apiPath.length - 5 || apiPath.indexOf('.yml') === apiPath.length - 4) {%> jsYaml.load(fs.readFileSync(path.join(__dirname, './<%=apiPath.replace(/\\/g, "/")%>'))) <% }else{ %> require(path.join(__dirname, './<%=apiPath.replace(/\\/g, "/")%>')) <% } %>
                 }
         });
         <%}%>

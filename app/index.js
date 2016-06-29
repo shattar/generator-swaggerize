@@ -157,7 +157,7 @@ var ModuleGenerator = yeoman.generators.Base.extend({
             this.copy('gitignore', '.gitignore');
             this.copy('npmignore', '.npmignore');
 
-            var relativeApiPath = this.apiConfigPath = path.relative(this.appRoot, path.join(this.appRoot, 'config/' + path.basename(this.apiPath))).replace(/\\/g, '/');
+            var relativeApiPath = this.apiConfigPath = path.relative(this.appRoot, path.join(this.appRoot, 'config/' + path.basename(this.apiPath)));
 
             this.template('server_' + this.framework + '.js', 'server.js', {
                 apiPath: relativeApiPath
@@ -293,7 +293,7 @@ var ModuleGenerator = yeoman.generators.Base.extend({
     },
 
     tests: function () {
-        var self, api, models, resourcePath, handlersPath, modelsPath, apiPath;
+        var self, api, models, parameters, resourcePath, handlersPath, modelsPath, apiPath;
 
         if (this.only.length > 0 && !~this.only.indexOf('tests')) {
             return;
@@ -304,6 +304,7 @@ var ModuleGenerator = yeoman.generators.Base.extend({
         self = this;
         api = this.api;
         models = {};
+        parameters = api.parameters || {};
 
         apiPath = path.relative(path.join(self.appRoot, 'tests'), path.join(self.appRoot, 'config/' + path.basename(this.apiPath)));
         modelsPath = path.join(self.appRoot, 'models');
@@ -382,7 +383,8 @@ var ModuleGenerator = yeoman.generators.Base.extend({
                 handlers: handlersPath,
                 resourcePath: resourcePath,
                 operations: operations,
-                models: models
+                models: models,
+                parameters: parameters
             });
 
         });
