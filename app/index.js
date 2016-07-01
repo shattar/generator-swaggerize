@@ -9,7 +9,8 @@ var util = require('util'),
     builderUtils = require('swaggerize-routes/lib/utils'),
     wreck = require('wreck'),
     enjoi = require('enjoi'),
-    update = require('./update');
+    update = require('./update'),
+    SwaggerParser = require('swagger-parser');
 
 var ModuleGenerator = yeoman.generators.Base.extend({
     init: function () {
@@ -105,30 +106,32 @@ var ModuleGenerator = yeoman.generators.Base.extend({
                 done(new Error('Unrecognized framework: ' + this.framework));
                 return;
             }
-
-            if (props.apiPath.indexOf('http') === 0) {
-                wreck.get(props.apiPath, function (err, res, body) {
-                    var fp = props.apiPath.split('/');
-
-                    if (err) {
-                        done(err);
-                        return;
-                    }
-                    if (res.statusCode !== 200) {
-                        done(new Error('404: ' + props.apiPath));
-                        return;
-                    }
-                    self.rawApi = body;
-                    self.apiPath = path.join(self.appRoot, 'config/' + fp[fp.length - 1]);
-                    self.api = loadApi(self.apiPath, body);
+            
+            SwaggerParser.dereference(props.apiPath).then(function(api) {
+                self.api = api;
+                
+                if ((/^http.?:\/\//i).test(props.apiPath)) {
+                    // Get the API spec (yes, again) in order to have it locally.
+                    wreck.get(props.apiPath, function(err, res, body) {
+                        if (err) {
+                            done(err);
+                            return;
+                        }
+                        if (res.statusCode !== 200) {
+                            done(new Error(res.statusCode + ': ' + props.apiPath));
+                            return;
+                        }
+                        self.rawApi = body;
+                        self.apiPath = path.join(self.appRoot, 'config/' + props.apiPath.split('/').slice(-1));
+                        done();
+                    });
+                } else {
+                    self.apiPath = path.resolve(props.apiPath);
                     done();
-                });
-            }
-            else {
-                this.apiPath = path.resolve(props.apiPath);
-                this.api = loadApi(this.apiPath);
-                done();
-            }
+                }
+            }).catch(function(err) {
+               done(err); 
+            });
         }.bind(this));
     },
 
@@ -150,6 +153,9 @@ var ModuleGenerator = yeoman.generators.Base.extend({
     },
 
     app: function () {
+
+        var relativeApiPath = this.apiConfigPath = path.relative(this.appRoot, path.join(this.appRoot, 'config/' + path.basename(this.apiPath)));
+
         if (this.only.length === 0) {
             this.mkdir('config');
 
@@ -157,23 +163,21 @@ var ModuleGenerator = yeoman.generators.Base.extend({
             this.copy('gitignore', '.gitignore');
             this.copy('npmignore', '.npmignore');
 
-            var relativeApiPath = this.apiConfigPath = path.relative(this.appRoot, path.join(this.appRoot, 'config/' + path.basename(this.apiPath)));
-
             this.template('server_' + this.framework + '.js', 'server.js', {
                 apiPath: relativeApiPath
             });
             this.template('_package.json', 'package.json');
             this.template('_README.md', 'README.md');
         }
-
-        //File
-        if (fs.existsSync(this.apiPath)) {
-            this.copy(this.apiPath, 'config/' + path.basename(this.apiPath));
-        }
-        //Url
-        else {
-            if (!fs.existsSync(this.apiPath)) {
-                this.write(this.apiPath, this.rawApi);
+        
+        if (this.rawApi) {
+            // The raw api object is already read into a property (like from http)
+            this.write(this.apiConfigPath, this.rawApi);
+        } else if (fs.existsSync(this.apiPath)) {
+            // The source api file exists.
+            if (path.relative(this.apiPath, this.apiConfigPath)) {
+                // The source api file is a different location than one in the config directory
+                this.copy(this.apiPath, this.apiConfigPath);
             }
         }
     },
@@ -391,12 +395,5 @@ var ModuleGenerator = yeoman.generators.Base.extend({
     }
 
 });
-
-function loadApi(apiPath, content) {
-    if (apiPath.indexOf('.yaml') === apiPath.length - 5 || apiPath.indexOf('.yml') === apiPath.length - 4) {
-        return jsYaml.load(content || fs.readFileSync(apiPath));
-    }
-    return content ? JSON.parse(content) : yeoman.file.readJSON(apiPath);
-}
 
 module.exports = ModuleGenerator;
