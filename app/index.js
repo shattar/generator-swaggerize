@@ -10,6 +10,7 @@ var util = require('util'),
     wreck = require('wreck'),
     enjoi = require('enjoi'),
     update = require('./update'),
+    mockgen = require('./mockgen'),
     SwaggerParser = require('swagger-parser');
 
 var ModuleGenerator = yeoman.generators.Base.extend({
@@ -107,11 +108,14 @@ var ModuleGenerator = yeoman.generators.Base.extend({
                 return;
             }
             
-            SwaggerParser.dereference(props.apiPath).then(function(api) {
+            this.swaggerParser = new SwaggerParser();
+            
+            this.swaggerParser.validate(props.apiPath).then(function(api) {
                 self.api = api;
-                
+
                 if ((/^http.?:\/\//i).test(props.apiPath)) {
                     // Get the API spec (yes, again) in order to have it locally.
+                    // Probably could just use the swagger parser, but that is all dereferenced.
                     wreck.get(props.apiPath, function(err, res, body) {
                         if (err) {
                             done(err);
@@ -183,20 +187,19 @@ var ModuleGenerator = yeoman.generators.Base.extend({
     },
 
     handlers: function () {
-        var routes, self;
+        var routes;
 
-        if (this.only.length > 0 && !~this.only.indexOf('handlers')) {
+        if (this.only.length > 0 && this.only.indexOf('handlers') < 0) {
             return;
         }
 
-        self = this;
         routes = {};
 
         this.mkdir('handlers');
 
         Object.keys(this.api.paths).forEach(function (path) {
             var pathnames, route;
-            var def = self.api.paths[path];
+            var def = this.api.paths[path];
 
             route = {
                 path: path,
@@ -216,7 +219,7 @@ var ModuleGenerator = yeoman.generators.Base.extend({
             route.pathname = pathnames.join('/');
 
             builderUtils.verbs.forEach(function (verb) {
-                var operation = self.api.paths[path][verb];
+                var operation = this.api.paths[path][verb];
 
                 if (!operation) {
                     return;
@@ -227,13 +230,14 @@ var ModuleGenerator = yeoman.generators.Base.extend({
                     name: operation.operationId || '',
                     description: operation.description || '',
                     parameters: operation.parameters || [],
-                    produces: operation.produces || []
+                    responses: operation.responses || {},
+                    produces: operation.produces || this.api.produces || []
                 });
 
                 // if handler specified within specification then use that path
                 // else default to the route path.
                 route.handler = operation['x-handler'] || def['x-handler'] || route.pathname;
-            });
+            }, this);
 
             if (routes[route.pathname]) {
                 routes[route.pathname].methods.push.apply(routes[route.pathname].methods, route.methods);
@@ -241,124 +245,50 @@ var ModuleGenerator = yeoman.generators.Base.extend({
             }
 
             routes[route.pathname] = route;
-        });
+        }, this);
 
         Object.keys(routes).forEach(function (routePath) {
-            var handlername, route, file;
+            var handlerName, route, file;
 
             route = routes[routePath];
-            handlername = route.handler;
+            handlerName = route.handler;
 
-            if (!~handlername.indexOf('handlers/')) {
-                handlername = 'handlers/' + route.handler;
+            if (handlerName.indexOf('handlers/') < 0) {
+                handlerName = 'handlers/' + route.handler;
             }
 
-            if (!~handlername.indexOf('.js')) {
-                handlername += '.js';
+            if (handlerName.indexOf('.js') < 0) {
+                handlerName += '.js';
             }
 
-            file = path.join(self.appRoot, handlername);
+            file = path.join(this.appRoot, handlerName);
 
-            if (fs.existsSync(file)) {
-                fs.writeFileSync(file, update.handlers(file, self.framework, route));
-                return;
-            }
+            //if (fs.existsSync(file)) {
+            //    fs.writeFileSync(file, update.handlers(file, this.framework, route));
+            //    return;
+            //}
 
-            self.template('_handler_' + self.framework + '.js', file, route);
-        });
-    },
-
-    models: function () {
-        var self = this;
-
-        if (this.only.length > 0 && !~this.only.indexOf('models')) {
-            return;
-        }
-
-        this.mkdir('models');
-
-        Object.keys(this.api.definitions || {}).forEach(function (modelName) {
-            var fileName, model;
-
-            fileName = modelName.toLowerCase() + '.js';
-
-            model = self.api.definitions[modelName];
-
-            if (!model.id) {
-                model.id = modelName;
-            }
-            // For non-object models referenced as part of definitions, no need generate a model file.
-            if (model.type !== 'object' || !model.hasOwnProperty('type')) {
-                return;
-            }
-
-            self.template('_model.js', path.join(self.appRoot, 'models/' + fileName), model);
-        });
+            this.template('_handler_' + this.framework + '.js', file, {
+                route: route,
+                mockgen: mockgen
+            });
+        }, this);
     },
 
     tests: function () {
-        var self, api, models, parameters, resourcePath, handlersPath, modelsPath, apiPath;
+        var api, apiPath, handlersPath, resourcePath;
 
-        if (this.only.length > 0 && !~this.only.indexOf('tests')) {
+        if (this.only.length > 0 && this.only.indexOf('tests') < 0) {
             return;
         }
 
         this.mkdir('tests');
+        
+        apiPath = path.relative(path.join(this.appRoot, 'tests'), path.join(this.appRoot, 'config/' + path.basename(this.apiPath)));
+        handlersPath = path.relative(path.join(this.appRoot, 'tests'), path.join(this.appRoot, 'handlers'));
+        resourcePath = this.api.basePath;
 
-        self = this;
-        api = this.api;
-        models = {};
-        parameters = api.parameters || {};
-
-        apiPath = path.relative(path.join(self.appRoot, 'tests'), path.join(self.appRoot, 'config/' + path.basename(this.apiPath)));
-        modelsPath = path.join(self.appRoot, 'models');
-        handlersPath = path.relative(path.join(self.appRoot, 'tests'), path.join(self.appRoot, 'handlers'));
-
-        if (api.definitions && modelsPath) {
-
-            Object.keys(api.definitions).forEach(function (key) {
-                var modelSchema, ModelCtor, options;
-
-                options = {};
-                modelSchema = api.definitions[key];
-                // For non-object models referenced as part of definitions, no model file exists.
-                if (modelSchema.type !== 'object' || !modelSchema.hasOwnProperty('type')) {
-                    return;
-                }
-                ModelCtor = require(path.join(self.appRoot, 'models/' + key.toLowerCase() + '.js'));
-
-                Object.keys(modelSchema.properties).forEach(function (prop) {
-                    var defaultValue;
-
-                    switch (modelSchema.properties[prop].type) {
-                        case 'integer':
-                        case 'number':
-                        case 'byte':
-                            defaultValue = 1;
-                            break;
-                        case 'string':
-                            defaultValue = 'helloworld';
-                            break;
-                        case 'boolean':
-                            defaultValue = true;
-                            break;
-                        default:
-                            break;
-                    }
-
-                    if (modelSchema.required && !!~modelSchema.required.indexOf(prop)) {
-                        options[prop] = defaultValue;
-                    }
-                });
-
-                models[key] = new ModelCtor(options);
-            });
-
-        }
-
-        resourcePath = api.basePath;
-
-        Object.keys(api.paths).forEach(function (opath) {
+        Object.keys(this.api.paths).forEach(function (opath) {
             var fileName, operations;
 
             operations = [];
@@ -366,32 +296,31 @@ var ModuleGenerator = yeoman.generators.Base.extend({
             builderUtils.verbs.forEach(function (verb) {
                 var operation = {};
 
-                if (!api.paths[opath][verb]) {
+                if (!this.api.paths[opath][verb]) {
                     return;
                 }
 
-                Object.keys(api.paths[opath][verb]).forEach(function (key) {
-                    operation[key] = api.paths[opath][verb][key];
-                });
+                Object.keys(this.api.paths[opath][verb]).forEach(function (key) {
+                    operation[key] = this.api.paths[opath][verb][key];
+                }.bind(this));
 
                 operation.path = opath;
                 operation.method = verb;
 
                 operations.push(operation);
-            });
+            }, this);
 
-            fileName = path.join(self.appRoot, 'tests/test' + opath.replace(/\//g, '_') + '.js');
+            fileName = path.join(this.appRoot, 'tests/test' + opath.replace(/\//g, '_') + '.js');
 
-            self.template('_test_' + self.framework + '.js', fileName, {
+            this.template('_test_' + this.framework + '.js', fileName, {
                 apiPath: apiPath,
-                handlers: handlersPath,
+                handlersPath: handlersPath,
                 resourcePath: resourcePath,
                 operations: operations,
-                models: models,
-                parameters: parameters
+                mockgen: mockgen
             });
 
-        });
+        }, this);
     }
 
 });

@@ -12,11 +12,11 @@ test('api', function (t) {
     var app = express();
 
     <%_.forEach(operations, function (operation) { if (operation.method.toLowerCase() === 'post' || operation.method.toLowerCase() === 'put') { %>
-    app.use(require('body-parser')());<%}});%>
+    app.use(require('body-parser').json());<%}});%>
 
     app.use(swaggerize({
         api: path.join(__dirname, './<%=apiPath.replace(/\\/g, "/")%>'),
-        handlers: path.join(__dirname, '<%=handlers.replace(/\\/g, "/")%>')
+        handlers: path.join(__dirname, '<%=handlersPath.replace(/\\/g, "/")%>')
     }));
 
     <%_.forEach(operations, function (operation) {%>
@@ -49,32 +49,34 @@ test('api', function (t) {
         var sendBody = bodySchema && ['post', 'put'].indexOf(operation.method.toLowerCase()) >= 0;
         %>
         SwaggerParser.dereference(path.join(__dirname, './<%=apiPath.replace(/\\/g, "/")%>')).then(function(api) {
-            var responses = api.paths['<%=operation.path%>'].responses;
+            var expectedResponses = api.paths['<%=operation.path%>']['<%=operation.method%>'].responses;
             <%if (sendBody) {%>
-            var body = {
-                // Fill in body here.
-            };
-            <%}%>
-            request(app).<%=operation.method.toLowerCase()%>('<%=resourcePath%><%=testPath%>')<%if (sendBody) {%>.send(body)<%}%>.end(function(err, res) {
-                t.ok(!err, '<%=operation.method.toLowerCase()%> <%=operation.path%> no error.');
-                var response = responses[res.statusCode] || responses['default'];
-                if (response) {
-                    t.pass('Response status code recognized.');
-                    if (response.schema) {
-                        enjoi(response.schema).validate(res.body, function(error) {
-                            t.end(error);
-                        });
-                    } else if (res.body) {
-                        t.end('Response body not expected.')
+            var body = <%=mockgen(bodySchema, 12) + ';'%><%}%>
+            request(app)
+                .<%=operation.method.toLowerCase()%>('<%=resourcePath%><%=testPath%>')<%if (sendBody) {%>
+                .send(body)<%}%>
+                .end(function(err, res) {
+                    if (err) {
+                        t.end(err);
+                    } else {
+                        var expectedResponse = expectedResponses[res.statusCode] || expectedResponses['default'];
+                        if (expectedResponse) {
+                            t.pass('Response status code accepted.');
+                            if (expectedResponse.schema) {
+                                enjoi(expectedResponse.schema).validate(res.body, function(error) {
+                                    t.end(error);
+                                });
+                            } else {
+                                t.end();
+                            }
+                        } else {
+                            t.end('Response status code, ' + res.statusCode + ', not defined in schema.');
+                        }
                     }
-                } else {
-                    t.end('Response status code, ' + res.statusCode + ', not defined in schema.');
-                }
-            });
+                });
         }).catch(function(err) {
             t.end(err);
         });
     });
     <%});%>
-
 });

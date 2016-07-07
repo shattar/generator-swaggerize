@@ -18,11 +18,12 @@
     "dependencies": {<% if (framework === 'express') {%>
         "express": "^4.0.0",
         "body-parser": "^1.9.0",
-        "swaggerize-express": "^4.0.0"<%}%><% if (framework === 'hapi') {%>
+        "swaggerize-express": "^4.0.0",<%}%><% if (framework === 'hapi') {%>
         "hapi": "^8.0.0",
-        "swaggerize-hapi": "^1.0.0-"<%}%><% if (framework === 'restify') {%>
+        "swaggerize-hapi": "^1.0.0-",<%}%><% if (framework === 'restify') {%>
         "swaggerize-restify": "^2.0.0",
-        "restify": "^3.0.3"<%}%>
+        "restify": "^3.0.3",<%}%>
+        "swagger-parser": "^3.4.1"
     },
     "devDependencies": {
         "tape": "^3.0.0",
@@ -37,7 +38,7 @@
         "test": "tape tests/*.js",
         "cover": "istanbul cover tape -- test/*.js",
         "lint": "jshint -c .jshintrc --exclude ./node_modules .",
-        "regenerate": "yo swaggerize --only=handlers,models,tests --framework <%=framework%> --apiPath <%=apiConfigPath.replace(/\\/g, '/')%>"
+        "regenerate": "yo swaggerize --only=handlers,tests --framework <%=framework%> --apiPath <%=apiConfigPath.replace(/\\/g, '/')%>"
     },
     "main" : "./server"
 }
